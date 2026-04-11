@@ -1,0 +1,49 @@
+# ============================================================
+#  Bach Dang WAF — Docs build check
+#  Validates that the VitePress documentation builds cleanly
+#  on every pull request that touches apps/docs.
+# ============================================================
+
+name: Docs — Build Check
+
+on:
+  pull_request:
+    paths:
+      - "apps/docs/**"
+      - ".github/workflows/check-docs.yml"
+  workflow_dispatch:
+
+jobs:
+  build-docs:
+    name: Build VitePress docs
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup pnpm 8.15.0
+        uses: pnpm/action-setup@v4
+        with:
+          version: "8.15.0"
+
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: pnpm
+
+      - name: Restore pnpm cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.pnpm-store
+          key: ${{ runner.os }}-pnpm-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: ${{ runner.os }}-pnpm-
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build documentation
+        run: pnpm --filter bach-dang-waf-docs build
