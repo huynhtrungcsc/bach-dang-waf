@@ -1,0 +1,8 @@
+Bach Dang WAF
+Copyright 2025–2026 Huỳnh Chí Trung
+
+This product includes software developed by third parties.
+
+Third-party libraries used by this project are listed in the respective
+package.json files under apps/api and apps/web. Each dependency is
+distributed under its own license terms.

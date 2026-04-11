@@ -1,0 +1,62 @@
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Preserve source directories named 'logs'
+!apps/api/src/domains/logs/
+!apps/web/src/components/logs/
+!apps/web/src/components/pages/Logs.tsx
+
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Build artifacts
+dist/
+dist-ssr/
+out/
+build/
+.next/
+
+# Turbo & cache
+.turbo/
+.cache/
+
+# Environment — never commit secrets
+.env
+.env.*
+!.env.example
+.devcontainer/.env
+
+# Lock files — pnpm only
+package-lock.json
+yarn.lock
+bun.lockb
+
+# Editor configs
+.vscode/*
+!.vscode/extensions.json
+.idea/
+.DS_Store
+Thumbs.db
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Replit platform
+replit.md
+.replit
+.local/
+attached_assets/
+
+# Misc
+landing/
+.seeded
+coverage/
+*.tsbuildinfo

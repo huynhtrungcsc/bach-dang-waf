@@ -1,0 +1,39 @@
+{
+  "name": "bach-dang-waf",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Bach Dang WAF — self-hosted Nginx + ModSecurity management console",
+  "author": {
+    "name": "Huynh Chi Trung",
+    "url": "https://github.com/huynhtrungcsc"
+  },
+  "keywords": [
+    "waf",
+    "nginx",
+    "modsecurity",
+    "security",
+    "self-hosted",
+    "reverse-proxy"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/huynhtrungcsc/bach-dang-waf.git"
+  },
+  "license": "MIT",
+  "scripts": {
+    "dev": "turbo dev",
+    "build": "turbo build",
+    "lint": "turbo lint",
+    "clean": "turbo clean && rm -rf node_modules",
+    "test": "turbo test",
+    "typecheck": "turbo typecheck"
+  },
+  "devDependencies": {
+    "turbo": "^2.3.3"
+  },
+  "engines": {
+    "node": ">=18",
+    "pnpm": ">=8"
+  },
+  "packageManager": "pnpm@8.15.0"
+}

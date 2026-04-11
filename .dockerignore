@@ -1,0 +1,53 @@
+# Version control
+.git/
+.gitignore
+
+# Dependencies — reinstalled inside container
+node_modules/
+.pnpm-store/
+
+# Build artifacts
+dist/
+dist-ssr/
+build/
+out/
+.next/
+
+# Cache and turbo
+.turbo/
+.cache/
+*.tsbuildinfo
+
+# Environment files — injected at runtime, never baked in
+.env
+.env.*
+!.env.example
+
+# Test and coverage
+coverage/
+__tests__/
+*.test.ts
+*.spec.ts
+
+# Editor and OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+*.log
+
+# Documentation
+README.md
+CONTRIBUTING.md
+SECURITY.md
+NOTICE
+
+# Replit platform
+replit.md
+.replit
+.local/
+attached_assets/
+
+# Scripts not needed in container
+scripts/
+landing/
