@@ -3,6 +3,7 @@ import { AppSidebar } from './AppSidebar';
 import { DashboardHeader } from './DashboardHeader';
 import { CommandPalette } from '@/components/ui/CommandPalette';
 import { QuickActionDial } from '@/components/ui/QuickActionDial';
+import { AiChat } from '@/components/ai/AiChat';
 
 interface DashboardLayoutProps {
   children: ReactNode;
@@ -41,6 +42,7 @@ export function DashboardLayout({ children, title, breadcrumbs }: DashboardLayou
 
       <CommandPalette open={cmdOpen} onClose={() => setCmdOpen(false)} />
       <QuickActionDial />
+      <AiChat />
     </div>
   );
 }
