@@ -1,0 +1,21 @@
+{
+  "name": "bach-dang-waf-docker",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Bạch Đằng WAF — Docker Configuration",
+  "scripts": {
+    "dev": "turbo dev",
+    "build": "turbo build",
+    "lint": "turbo lint",
+    "clean": "turbo clean && rm -rf node_modules",
+    "test": "turbo test"
+  },
+  "devDependencies": {
+    "turbo": "^2.3.3"
+  },
+  "engines": {
+    "node": ">=20",
+    "pnpm": ">=8"
+  },
+  "packageManager": "pnpm@8.15.0"
+}

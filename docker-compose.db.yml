@@ -1,0 +1,42 @@
+# ============================================================
+#  Bach Dang WAF — Database-only Compose
+#  Starts a single PostgreSQL 16 container for local
+#  development when the API runs directly on the host
+#  (not inside Docker).
+#
+#  Usage:
+#    docker compose -f docker-compose.db.yml up -d
+#    docker compose -f docker-compose.db.yml down
+# ============================================================
+
+services:
+
+  database:
+    image: postgres:16-alpine
+    container_name: waf-database
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${WAF_DB_NAME:-bach_dang_waf}
+      POSTGRES_USER: ${WAF_DB_USER:-waf_user}
+      POSTGRES_PASSWORD: ${WAF_DB_PASS:-change_before_deploy}
+      POSTGRES_INITDB_ARGS: "--encoding=UTF-8 --lc-collate=C --lc-ctype=C"
+    ports:
+      - "127.0.0.1:${WAF_DB_PORT:-5432}:5432"
+    volumes:
+      - waf_pg_data:/var/lib/postgresql/data
+    networks:
+      - waf-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${WAF_DB_USER:-waf_user} -d ${WAF_DB_NAME:-bach_dang_waf}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+volumes:
+  waf_pg_data:
+    driver: local
+
+networks:
+  waf-net:
+    driver: bridge
