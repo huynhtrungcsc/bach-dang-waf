@@ -1,11 +1,13 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import {
   BotMessageSquare, X, Send, Loader2,
-  ChevronDown, Shield, RotateCcw,
+  ChevronDown, Shield, RotateCcw, Settings2,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { aiService, ChatMessage } from '@/services/ai.service';
+import { AiProviderSettings } from './AiProviderSettings';
 import { cn } from '@/lib/utils';
+import { useAuth } from '@/auth';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -70,8 +72,8 @@ function MessageBubble({ msg }: { msg: Message }) {
             {msg.ts.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}
           </span>
           {msg.model && msg.model !== 'guard' && (
-            <span className="text-[10px] text-slate-300 font-mono">
-              {msg.model.split('/').pop()}
+            <span className="text-[10px] text-slate-300 font-mono truncate max-w-[180px]">
+              {msg.model}
             </span>
           )}
         </div>
@@ -84,10 +86,14 @@ function MessageBubble({ msg }: { msg: Message }) {
 
 export function AiChat() {
   const [open, setOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [showSuggestions, setShowSuggestions] = useState(true);
+
+  const { user } = useAuth();
+  const isAdmin = user?.role === 'admin';
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -141,7 +147,7 @@ export function AiChat() {
       const errText =
         err?.response?.data?.message ||
         err?.message ||
-        'Không thể kết nối dịch vụ AI. Vui lòng thử lại.';
+        'Không thể kết nối dịch vụ AI. Vui lòng kiểm tra cấu hình provider trong phần cài đặt.';
       const errMsg: Message = {
         id: crypto.randomUUID(),
         role: 'assistant',
@@ -188,7 +194,7 @@ export function AiChat() {
       <div
         className={cn(
           'fixed bottom-0 right-0 z-40 flex flex-col',
-          'w-[400px] h-[600px] max-h-[90vh]',
+          'w-[420px] h-[600px] max-h-[90vh]',
           'bg-slate-50 border-l border-t border-slate-200 shadow-xl',
           'transition-transform duration-300 ease-in-out',
           open ? 'translate-x-0 translate-y-0' : 'translate-x-full'
@@ -206,11 +212,21 @@ export function AiChat() {
             </div>
           </div>
           <div className="flex items-center gap-1">
+            {/* Settings button — admin only */}
+            {isAdmin && (
+              <button
+                onClick={() => setSettingsOpen(true)}
+                className="p-1.5 rounded text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-colors"
+                title="AI Provider Settings"
+              >
+                <Settings2 className="w-3.5 h-3.5" />
+              </button>
+            )}
             {messages.length > 0 && (
               <button
                 onClick={handleClear}
                 className="p-1.5 rounded text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors"
-                title="Xóa lịch sử"
+                title="Clear chat"
               >
                 <RotateCcw className="w-3.5 h-3.5" />
               </button>
@@ -226,7 +242,6 @@ export function AiChat() {
 
         {/* Messages area */}
         <div className="flex-1 overflow-y-auto px-3 py-3 space-y-3">
-          {/* Welcome / suggestions */}
           {messages.length === 0 && showSuggestions && (
             <div className="space-y-3">
               <div className="bg-white rounded-lg border border-slate-200 p-3 shadow-xs">
@@ -254,12 +269,10 @@ export function AiChat() {
             </div>
           )}
 
-          {/* Message list */}
           {messages.map(msg => (
             <MessageBubble key={msg.id} msg={msg} />
           ))}
 
-          {/* Loading indicator */}
           {loading && (
             <div className="flex justify-start">
               <div className="bg-white border border-slate-200 rounded-lg rounded-bl-sm shadow-xs">
@@ -287,7 +300,6 @@ export function AiChat() {
                 'px-3 py-2 text-sm text-slate-800 placeholder:text-slate-400',
                 'focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent',
                 'disabled:opacity-50 max-h-28 overflow-y-auto',
-                'scrollbar-thin'
               )}
               style={{ lineHeight: '1.5' }}
               onInput={e => {
@@ -314,6 +326,9 @@ export function AiChat() {
           </p>
         </div>
       </div>
+
+      {/* Provider settings modal */}
+      <AiProviderSettings open={settingsOpen} onClose={() => setSettingsOpen(false)} />
     </>
   );
 }

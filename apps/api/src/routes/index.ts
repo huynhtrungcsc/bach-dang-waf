@@ -18,6 +18,7 @@ import replicaRoutes from '../domains/cluster/cluster.routes';
 import nodeSyncRoutes from '../domains/cluster/node-sync.routes';
 import nlbRoutes from '../domains/nlb/nlb.routes';
 import aiRoutes from '../domains/ai/ai.routes';
+import aiProviderRoutes from '../domains/ai/ai-provider.routes';
 
 const router = Router();
 
@@ -50,5 +51,6 @@ router.use('/system-config', systemConfigRoutes);
 router.use('/node-sync', nodeSyncRoutes);
 router.use('/nlb', nlbRoutes);
 router.use('/ai', aiRoutes);
+router.use('/ai-providers', aiProviderRoutes);
 
 export default router;

@@ -2,10 +2,11 @@ import axios from 'axios';
 import logger from '../../utils/logger';
 import { ChatMessage, ChatResponse, IntentType } from './ai.types';
 import { buildContext, detectIntents } from './ai.context-builder';
+import { getEnabledProvidersWithKeys } from './ai-provider.service';
 
-// ─── Model rotation list (open-source first) ─────────────────────────────────
+// ─── Fallback: legacy env-var provider (MegaLLM) ─────────────────────────────
 
-const MODELS = [
+const LEGACY_MODELS = [
   'deepseek/deepseek-r1',
   'qwen/qwen3-72b',
   'meta-llama/llama-3.3-70b-instruct',
@@ -13,9 +14,8 @@ const MODELS = [
   'google/gemini-2.0-flash-001',
   'openai/gpt-4o-mini',
 ];
-
-const MEGALLM_BASE = 'https://ai.megallm.io/v1';
-const API_KEY = process.env.MEGALLM_API_KEY_1 || '';
+const LEGACY_BASE = 'https://ai.megallm.io/v1';
+const LEGACY_KEY  = process.env.MEGALLM_API_KEY_1 || '';
 
 // ─── System prompt ────────────────────────────────────────────────────────────
 
@@ -49,60 +49,75 @@ PHONG CÁCH:
 • Dùng bullet points để trình bày danh sách
 • Đơn vị: GB cho RAM, % cho CPU/disk, ms cho latency`;
 
-// ─── LLM call with model rotation ────────────────────────────────────────────
+// ─── Single LLM call (one provider + model) ───────────────────────────────────
+
+async function callOne(
+  baseUrl: string,
+  apiKey: string,
+  model: string,
+  messages: { role: string; content: string }[]
+): Promise<string> {
+  const url = `${baseUrl.replace(/\/$/, '')}/chat/completions`;
+  const response = await axios.post(
+    url,
+    { model, messages, max_tokens: 1024, temperature: 0.3, stream: false },
+    {
+      headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+      timeout: 35000,
+    }
+  );
+  const content: string = response.data?.choices?.[0]?.message?.content ?? '';
+  if (!content.trim()) throw new Error('Empty response from model');
+  return content;
+}
+
+// ─── Rotation: try each enabled provider in priority order ───────────────────
 
 async function callLLM(
-  messages: { role: string; content: string }[],
-  modelIndex = 0
+  messages: { role: string; content: string }[]
 ): Promise<{ content: string; model: string }> {
-  if (modelIndex >= MODELS.length) {
+  // 1. Load from DB
+  const providers = await getEnabledProvidersWithKeys();
+
+  if (providers.length > 0) {
+    for (const p of providers) {
+      try {
+        const content = await callOne(p.baseUrl, p.apiKey, p.model, messages);
+        logger.info(`[AI] Used provider: ${p.label} / ${p.model}`);
+        return { content, model: `${p.label} — ${p.model}` };
+      } catch (err: any) {
+        const status = err?.response?.status;
+        const msg = err?.response?.data?.error?.message || err?.message || 'unknown';
+        logger.warn(`[AI] Provider ${p.label} (${p.model}) failed (${status || 'timeout'}): ${msg}`);
+      }
+    }
+    throw new Error('Tất cả providers đã được thử nhưng đều thất bại. Vui lòng kiểm tra cấu hình AI.');
+  }
+
+  // 2. Fallback to legacy env-var MegaLLM rotation
+  if (LEGACY_KEY) {
+    for (const model of LEGACY_MODELS) {
+      try {
+        const content = await callOne(LEGACY_BASE, LEGACY_KEY, model, messages);
+        logger.info(`[AI] Used legacy model: ${model}`);
+        return { content, model };
+      } catch (err: any) {
+        const status = err?.response?.status;
+        const msg = err?.response?.data?.error?.message || err?.message || 'unknown';
+        logger.warn(`[AI] Legacy model ${model} failed (${status || 'timeout'}): ${msg}`);
+      }
+    }
     throw new Error('Tất cả models đều không khả dụng. Vui lòng thử lại sau.');
   }
 
-  const model = MODELS[modelIndex];
-
-  try {
-    const response = await axios.post(
-      `${MEGALLM_BASE}/chat/completions`,
-      {
-        model,
-        messages,
-        max_tokens: 1024,
-        temperature: 0.3,
-        stream: false,
-      },
-      {
-        headers: {
-          Authorization: `Bearer ${API_KEY}`,
-          'Content-Type': 'application/json',
-        },
-        timeout: 35000,
-      }
-    );
-
-    const content: string =
-      response.data?.choices?.[0]?.message?.content ?? '';
-
-    if (!content.trim()) throw new Error('Empty response from model');
-
-    logger.info(`[AI] Used model: ${model}`);
-    return { content, model };
-  } catch (err: any) {
-    const status = err?.response?.status;
-    const errMsg = err?.response?.data?.error?.message || err?.message || 'unknown';
-
-    logger.warn(`[AI] Model ${model} failed (${status || 'timeout'}): ${errMsg}. Trying next...`);
-
-    // Rotate to next model
-    return callLLM(messages, modelIndex + 1);
-  }
+  throw new Error('Chưa cấu hình AI provider nào. Vui lòng vào phần cài đặt AI để thêm provider.');
 }
 
 // ─── WAF scope guard ──────────────────────────────────────────────────────────
 
 const OFFSCOPE_PATTERNS = [
-  /^\s*\d+\s*[+\-*\/]\s*\d+/,                        // math expressions
-  /sơn tùng|taylor swift|bts|kpop|football|bóng đá/i, // entertainment
+  /^\s*\d+\s*[+\-*\/]\s*\d+/,
+  /sơn tùng|taylor swift|bts|kpop|football|bóng đá/i,
   /thời tiết|weather|nhiệt độ|temperature/i,
   /nấu ăn|recipe|công thức nấu/i,
   /dịch thuật|translate.*language|ngôn ngữ khác/i,
@@ -120,37 +135,27 @@ export async function processChat(
   message: string,
   history: ChatMessage[] = []
 ): Promise<ChatResponse> {
-  if (!API_KEY) {
-    throw new Error('MEGALLM_API_KEY_1 chưa được cấu hình.');
-  }
-
-  // Quick off-scope check
   if (isLikelyOffScope(message)) {
     return {
-      reply:
-        'Tôi chỉ hỗ trợ phân tích hệ thống WAF Bach Dang. Vui lòng đặt câu hỏi về tình trạng hệ thống, logs, WAF rules, hoặc phân tích tấn công.',
+      reply: 'Tôi chỉ hỗ trợ phân tích hệ thống WAF Bach Dang. Vui lòng đặt câu hỏi về tình trạng hệ thống, logs, WAF rules, hoặc phân tích tấn công.',
       model: 'guard',
       intents: [],
     };
   }
 
-  // Detect intents and build context
   const intents: IntentType[] = detectIntents(message);
   const contextBlock = await buildContext(message, intents);
 
-  // Build message array for LLM
   const systemContent = contextBlock
     ? `${SYSTEM_PROMPT}\n\n${contextBlock}`
     : SYSTEM_PROMPT;
 
   const messages: { role: string; content: string }[] = [
     { role: 'system', content: systemContent },
-    // Include last 6 turns of history to keep context window reasonable
     ...history.slice(-6).map(m => ({ role: m.role, content: m.content })),
     { role: 'user', content: message },
   ];
 
   const { content, model } = await callLLM(messages);
-
   return { reply: content, model, intents };
 }

@@ -822,3 +822,22 @@ model NLBHealthCheck {
   @@index([upstreamHost, upstreamPort])
   @@map("nlb_health_checks")
 }
+
+// ── AI Provider Configuration ──────────────────────────────────────────────
+
+model AiProviderConfig {
+  id       String  @id @default(cuid())
+  name     String  @unique   // slug, e.g. "openai", "custom-1"
+  label    String            // display name
+  baseUrl  String            // OpenAI-compatible base URL
+  apiKey   String?           // stored encrypted; null for local/no-auth
+  model    String            // default model name for this provider
+  enabled  Boolean @default(false)
+  priority Int     @default(99) // lower = tried first
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([enabled, priority])
+  @@map("ai_provider_configs")
+}
