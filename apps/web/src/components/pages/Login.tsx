@@ -6,7 +6,6 @@ import { Route } from '@/routes/login';
 import ForcePasswordChange from './ForcePasswordChange';
 import Force2FASetup from './Force2FASetup';
 import { Eye, EyeOff } from 'lucide-react';
-import { BrandMark } from '@/components/ui/BrandLogo';
 
 type LoginStep = 'login' | 'passwordChange' | '2faSetup' | '2faVerify';
 
@@ -108,7 +107,7 @@ export default function Login() {
       <header style={{ background: ocean.deepest, borderBottom: `2px solid ${ocean.gold}` }}>
         <div className="flex items-center justify-between px-6 h-14">
           <div className="flex items-center gap-3">
-            <BrandMark size={28} variant="light" />
+            <img src="/bach-dang-waf-logo.png" alt="BACH DANG WAF" className="h-7 w-auto" />
             <div>
               <span className="font-semibold text-sm tracking-wide" style={{ color: ocean.text }}>
                 BACH DANG WAF
