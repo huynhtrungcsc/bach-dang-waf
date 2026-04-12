@@ -178,7 +178,7 @@ async function buildDomainsContext(): Promise<SystemContextSection> {
     const stats = await dashboardSvc.getDashboardStats();
     const lines = [
       `Total domains: ${stats.domains.total}`,
-      `Active: ${stats.domains.active}, Inactive: ${stats.domains.inactive ?? 0}`,
+      `Active: ${stats.domains.active}, Inactive: ${stats.domains.total - stats.domains.active}`,
     ];
     return { label: 'DOMAINS', data: lines.join('\n') };
   } catch (err) {
