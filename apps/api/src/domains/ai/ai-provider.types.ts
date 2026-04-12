@@ -148,6 +148,14 @@ export const PROVIDER_PRESETS: ProviderPreset[] = [
     description: 'Web-search augmented LLM',
   },
   {
+    name: 'xai-grok',
+    label: 'xAI Grok',
+    baseUrl: 'https://api.x.ai/v1',
+    modelSuggestions: ['grok-3', 'grok-3-mini', 'grok-3-fast', 'grok-2-1212'],
+    requiresKey: true,
+    description: 'Grok 3, Grok 3 Mini — by xAI',
+  },
+  {
     name: 'deepseek',
     label: 'DeepSeek (Direct)',
     baseUrl: 'https://api.deepseek.com/v1',
