@@ -19,28 +19,45 @@ interface Message extends ChatMessage {
   isError?: boolean;
 }
 
-interface PanelPos { x: number; y: number }
+interface Vec2 { x: number; y: number }
 
-const PANEL_W = 420;
-const PANEL_H = 580;
-const EDGE_GAP = 24;
+// ─── Constants ────────────────────────────────────────────────────────────────
 
-function defaultPos(): PanelPos {
+const BTN_SIZE  = 48;
+const PANEL_W   = 420;
+const PANEL_H   = 580;
+const EDGE_GAP  = 20;
+const DRAG_THRESHOLD = 4; // px — below this = tap/click
+
+function defaultBtnPos(): Vec2 {
   return {
-    x: Math.max(0, window.innerWidth  - PANEL_W - EDGE_GAP),
-    y: Math.max(0, window.innerHeight - PANEL_H - EDGE_GAP),
+    x: window.innerWidth  - BTN_SIZE - EDGE_GAP,
+    y: window.innerHeight - BTN_SIZE - EDGE_GAP,
   };
+}
+
+function panelNearBtn(btn: Vec2): Vec2 {
+  const pw = PANEL_W, ph = PANEL_H;
+  const vw = window.innerWidth, vh = window.innerHeight;
+  // Prefer: left of button, aligned to its bottom edge
+  let x = btn.x - pw - 8;
+  let y = btn.y + BTN_SIZE - ph;
+  if (x < 0) x = btn.x + BTN_SIZE + 8;       // flip right if off-screen left
+  if (y < 0) y = EDGE_GAP;                    // clamp top
+  x = Math.max(0, Math.min(x, vw - pw));
+  y = Math.max(0, Math.min(y, vh - ph));
+  return { x, y };
 }
 
 // ─── Suggestions ─────────────────────────────────────────────────────────────
 
 const SUGGESTIONS = [
-  { label: 'System metrics',    query: 'RAM và CPU hiện tại bao nhiêu?' },
-  { label: 'Active WAF rules',  query: 'Hệ thống đang bật những rule WAF nào?' },
-  { label: 'Attack events (1h)',query: 'Các cuộc tấn công trong 1 giờ gần đây?' },
-  { label: 'Disabled rules',    query: 'Rule nào đang tắt trong hệ thống?' },
-  { label: 'SQL injection log', query: 'Cuộc tấn công SQL Injection mới nhất là gì?' },
-  { label: 'Protected sites',   query: 'Có bao nhiêu domain đang được bảo vệ?' },
+  { label: 'System metrics',     query: 'RAM và CPU hiện tại bao nhiêu?' },
+  { label: 'Active WAF rules',   query: 'Hệ thống đang bật những rule WAF nào?' },
+  { label: 'Attack events (1h)', query: 'Các cuộc tấn công trong 1 giờ gần đây?' },
+  { label: 'Disabled rules',     query: 'Rule nào đang tắt trong hệ thống?' },
+  { label: 'SQL injection log',  query: 'Cuộc tấn công SQL Injection mới nhất là gì?' },
+  { label: 'Protected sites',    query: 'Có bao nhiêu domain đang được bảo vệ?' },
 ];
 
 // ─── Typing indicator ─────────────────────────────────────────────────────────
@@ -91,7 +108,7 @@ function MessageRow({ msg }: { msg: Message }) {
           'text-[13px] rounded px-3 py-2.5 border',
           msg.isError
             ? 'bg-red-50 text-red-700 border-red-200'
-            : 'bg-white text-slate-800 border-slate-200'
+            : 'bg-white text-slate-800 border-slate-200',
         )}>
           {msg.isError && (
             <div className="flex items-center gap-1.5 mb-1.5 text-red-600">
@@ -114,7 +131,11 @@ function MessageRow({ msg }: { msg: Message }) {
               pre:        ({ children }) => <>{children}</>,
               blockquote: ({ children }) => <blockquote className="border-l-2 border-slate-300 pl-3 my-1.5 text-slate-600 italic">{children}</blockquote>,
               hr:         () => <hr className="border-slate-200 my-2" />,
-              a:          ({ children, href }) => <a href={href} className="text-blue-600 underline underline-offset-2 hover:text-blue-800" target="_blank" rel="noopener noreferrer">{children}</a>,
+              a:          ({ children, href }) => (
+                <a href={href} className="text-blue-600 underline underline-offset-2 hover:text-blue-800" target="_blank" rel="noopener noreferrer">
+                  {children}
+                </a>
+              ),
               code: ({ children, className }) => {
                 const isBlock = className?.includes('language-');
                 return isBlock
@@ -147,6 +168,51 @@ function MessageRow({ msg }: { msg: Message }) {
   );
 }
 
+// ─── Draggable hook ───────────────────────────────────────────────────────────
+
+function useDraggable(
+  getDefault: () => Vec2,
+  clamp: (p: Vec2) => Vec2,
+) {
+  const [pos, setPos] = useState<Vec2 | null>(null);
+  const offset  = useRef<Vec2>({ x: 0, y: 0 });
+  const moved   = useRef(false);
+  const active  = useRef(false);
+
+  const onPointerDown = useCallback((e: React.PointerEvent<HTMLElement>) => {
+    const cur = pos ?? getDefault();
+    e.currentTarget.setPointerCapture(e.pointerId);
+    offset.current = { x: e.clientX - cur.x, y: e.clientY - cur.y };
+    moved.current  = false;
+    active.current = true;
+    if (!pos) setPos(cur);
+  }, [pos, getDefault]);
+
+  const onPointerMove = useCallback((e: React.PointerEvent<HTMLElement>) => {
+    if (!active.current) return;
+    const nx = e.clientX - offset.current.x;
+    const ny = e.clientY - offset.current.y;
+    const cur = pos ?? getDefault();
+    if (Math.abs(nx - cur.x) > DRAG_THRESHOLD || Math.abs(ny - cur.y) > DRAG_THRESHOLD) {
+      moved.current = true;
+    }
+    if (moved.current) {
+      setPos(clamp({ x: nx, y: ny }));
+    }
+  }, [pos, getDefault, clamp]);
+
+  const onPointerUp = useCallback((e: React.PointerEvent<HTMLElement>) => {
+    e.currentTarget.releasePointerCapture(e.pointerId);
+    active.current = false;
+  }, []);
+
+  const wasDragged = () => moved.current;
+  const current    = () => pos ?? getDefault();
+  const reset      = (p: Vec2) => setPos(p);
+
+  return { pos, onPointerDown, onPointerMove, onPointerUp, wasDragged, current, reset };
+}
+
 // ─── Main component ───────────────────────────────────────────────────────────
 
 export function AiChat() {
@@ -156,15 +222,47 @@ export function AiChat() {
   const [input, setInput]             = useState('');
   const [loading, setLoading]         = useState(false);
   const [showSuggestions, setShowSuggestions] = useState(true);
-  const [pos, setPos]                 = useState<PanelPos | null>(null);
-  const [dragging, setDragging]       = useState(false);
 
   const { user }  = useAuth();
   const isAdmin   = user?.role === 'admin';
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef       = useRef<HTMLTextAreaElement>(null);
-  const dragOffset     = useRef<{ dx: number; dy: number }>({ dx: 0, dy: 0 });
+
+  // ── Button drag ──
+  const btnClamp = useCallback((p: Vec2): Vec2 => ({
+    x: Math.max(0, Math.min(p.x, window.innerWidth  - BTN_SIZE)),
+    y: Math.max(0, Math.min(p.y, window.innerHeight - BTN_SIZE)),
+  }), []);
+  const btn = useDraggable(defaultBtnPos, btnClamp);
+
+  // ── Panel drag ──
+  const [panelPos, setPanelPos] = useState<Vec2 | null>(null);
+  const [panelDragging, setPanelDragging] = useState(false);
+  const panelOffset = useRef<Vec2>({ x: 0, y: 0 });
+
+  const onPanelHeaderPointerDown = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    if ((e.target as HTMLElement).closest('button')) return;
+    const cur = panelPos ?? panelNearBtn(btn.current());
+    e.currentTarget.setPointerCapture(e.pointerId);
+    panelOffset.current = { x: e.clientX - cur.x, y: e.clientY - cur.y };
+    setPanelDragging(true);
+  }, [panelPos, btn]);
+
+  const onPanelHeaderPointerMove = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    if (!panelDragging) return;
+    const nx = e.clientX - panelOffset.current.x;
+    const ny = e.clientY - panelOffset.current.y;
+    setPanelPos({
+      x: Math.max(0, Math.min(nx, window.innerWidth  - PANEL_W)),
+      y: Math.max(0, Math.min(ny, window.innerHeight - PANEL_H)),
+    });
+  }, [panelDragging]);
+
+  const onPanelHeaderPointerUp = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    e.currentTarget.releasePointerCapture(e.pointerId);
+    setPanelDragging(false);
+  }, []);
 
   // ── Auto-scroll ──
   const scrollToBottom = useCallback(() => {
@@ -173,52 +271,21 @@ export function AiChat() {
 
   useEffect(() => {
     if (open) {
-      if (!pos) setPos(defaultPos());
       scrollToBottom();
       setTimeout(() => inputRef.current?.focus(), 120);
     }
   }, [open, messages]);
 
-  // ── Keep panel in viewport on resize ──
+  // ── Keep elements in viewport on resize ──
   useEffect(() => {
     const onResize = () => {
-      setPos(p => {
-        if (!p) return p;
-        return {
-          x: Math.min(p.x, window.innerWidth  - PANEL_W),
-          y: Math.min(p.y, window.innerHeight - PANEL_H),
-        };
-      });
+      setPanelPos(p => p ? {
+        x: Math.min(p.x, window.innerWidth  - PANEL_W),
+        y: Math.min(p.y, window.innerHeight - PANEL_H),
+      } : p);
     };
     window.addEventListener('resize', onResize);
     return () => window.removeEventListener('resize', onResize);
-  }, []);
-
-  // ── Drag handlers ──
-  const onHeaderPointerDown = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
-    if ((e.target as HTMLElement).closest('button')) return;
-    e.currentTarget.setPointerCapture(e.pointerId);
-    setDragging(true);
-    setPos(p => {
-      const cur = p ?? defaultPos();
-      dragOffset.current = { dx: e.clientX - cur.x, dy: e.clientY - cur.y };
-      return cur;
-    });
-  }, []);
-
-  const onHeaderPointerMove = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
-    if (!dragging) return;
-    const nx = e.clientX - dragOffset.current.dx;
-    const ny = e.clientY - dragOffset.current.dy;
-    setPos({
-      x: Math.max(0, Math.min(nx, window.innerWidth  - PANEL_W)),
-      y: Math.max(0, Math.min(ny, window.innerHeight - PANEL_H)),
-    });
-  }, [dragging]);
-
-  const onHeaderPointerUp = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
-    e.currentTarget.releasePointerCapture(e.pointerId);
-    setDragging(false);
   }, []);
 
   // ── Chat logic ──
@@ -259,39 +326,55 @@ export function AiChat() {
 
   const handleClear = () => { setMessages([]); setShowSuggestions(true); setInput(''); };
 
-  const panelPos = pos ?? defaultPos();
+  // ── Button click (only fires when NOT dragged) ──
+  const handleBtnClick = useCallback(() => {
+    if (btn.wasDragged()) return;
+    setOpen(prev => {
+      if (!prev) {
+        // Opening: anchor panel near current button position
+        setPanelPos(panelNearBtn(btn.current()));
+      }
+      return !prev;
+    });
+  }, [btn]);
+
+  const btnCur   = btn.current();
+  const panelCur = panelPos ?? panelNearBtn(btnCur);
 
   return (
     <>
-      {/* ── Floating trigger ── */}
+      {/* ── Floating trigger — draggable ── */}
       <button
-        onClick={() => setOpen(o => !o)}
+        onPointerDown={btn.onPointerDown}
+        onPointerMove={btn.onPointerMove}
+        onPointerUp={btn.onPointerUp}
+        onClick={handleBtnClick}
         className={cn(
-          'fixed z-50 w-12 h-12 rounded-full shadow-lg',
-          'flex items-center justify-center select-none',
-          'transition-colors duration-200',
+          'fixed z-50 flex items-center justify-center select-none',
+          'w-12 h-12 rounded-full shadow-lg transition-colors duration-150',
           open
             ? 'bg-slate-700 hover:bg-slate-600 text-white'
             : 'bg-slate-800 hover:bg-slate-700 text-white',
+          panelDragging ? 'cursor-grabbing' : 'cursor-grab',
         )}
-        style={{ bottom: EDGE_GAP, right: EDGE_GAP }}
+        style={{ left: btnCur.x, top: btnCur.y, touchAction: 'none' }}
         title="WAF Advisor"
       >
         {open
-          ? <X className="w-5 h-5" />
-          : <MessageCircleQuestion className="w-5 h-5" />
+          ? <X className="w-5 h-5 pointer-events-none" />
+          : <MessageCircleQuestion className="w-5 h-5 pointer-events-none" />
         }
       </button>
 
-      {/* ── Draggable panel ── */}
+      {/* ── Panel — draggable by header ── */}
       {open && (
         <div
           className="fixed z-40 flex flex-col bg-white border border-slate-200 shadow-2xl shadow-slate-900/15 rounded-sm"
           style={{
             width: PANEL_W,
             height: PANEL_H,
-            left: panelPos.x,
-            top:  panelPos.y,
+            left: panelCur.x,
+            top:  panelCur.y,
             willChange: 'left, top',
           }}
         >
@@ -299,11 +382,12 @@ export function AiChat() {
           <div
             className={cn(
               'flex items-center justify-between px-4 h-11 border-b border-slate-200 bg-slate-50 flex-shrink-0 rounded-t-sm select-none',
-              dragging ? 'cursor-grabbing' : 'cursor-grab',
+              panelDragging ? 'cursor-grabbing' : 'cursor-grab',
             )}
-            onPointerDown={onHeaderPointerDown}
-            onPointerMove={onHeaderPointerMove}
-            onPointerUp={onHeaderPointerUp}
+            onPointerDown={onPanelHeaderPointerDown}
+            onPointerMove={onPanelHeaderPointerMove}
+            onPointerUp={onPanelHeaderPointerUp}
+            style={{ touchAction: 'none' }}
           >
             <div className="flex items-center gap-2.5">
               <img src="/bach-dang-waf-logo.png" alt="WAF" className="h-5 w-auto flex-shrink-0" />
