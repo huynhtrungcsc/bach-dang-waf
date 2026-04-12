@@ -186,24 +186,23 @@ export function AiChat() {
 
   return (
     <>
-      {/* ── Trigger chip ── */}
+      {/* ── Trigger button (floating) ── */}
       <button
         onClick={() => setOpen(o => !o)}
         className={cn(
-          'fixed bottom-5 right-5 z-50 flex items-center gap-2',
-          'h-8 px-3 rounded border text-[12px] font-medium',
-          'shadow-sm transition-all duration-150 select-none',
+          'fixed bottom-6 right-6 z-50 flex items-center justify-center',
+          'w-12 h-12 rounded-full shadow-lg',
+          'transition-all duration-200 select-none',
           open
-            ? 'bg-slate-800 border-slate-700 text-white'
-            : 'bg-white border-slate-300 text-slate-700 hover:bg-slate-50 hover:border-slate-400',
+            ? 'bg-slate-700 hover:bg-slate-600 text-white'
+            : 'bg-slate-800 hover:bg-slate-700 text-white',
         )}
         title="WAF Query Console"
       >
-        {open ? (
-          <><X className="w-3.5 h-3.5" /> Close</>
-        ) : (
-          <><Terminal className="w-3.5 h-3.5 text-slate-500" /> Query Console</>
-        )}
+        {open
+          ? <X className="w-5 h-5" />
+          : <Terminal className="w-5 h-5" />
+        }
       </button>
 
       {/* ── Panel ── */}

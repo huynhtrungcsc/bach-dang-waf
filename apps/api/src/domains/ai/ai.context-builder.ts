@@ -64,9 +64,9 @@ async function buildMetricsContext(): Promise<SystemContextSection> {
       `CPU: ${stats.system.cpuUsage.toFixed(1)}% (${stats.system.cpuCores} cores, load 1m/5m/15m: ${loadAvg.map(l => l.toFixed(2)).join('/')})`,
       `RAM: ${(usedMem / 1024 ** 3).toFixed(2)} GB / ${(mem / 1024 ** 3).toFixed(2)} GB (${stats.system.memoryUsage.toFixed(1)}% used)`,
       `Disk: ${stats.system.diskUsage.toFixed(1)}% used`,
-      `Uptime: ${stats.uptimeDuration} (${stats.uptime.toFixed(2)}% availability)`,
+      `Uptime: ${stats.uptimeDuration} (${Number(stats.uptime).toFixed(2)}% availability)`,
       `Domains: ${stats.domains.total} total, ${stats.domains.active} active`,
-      `Alerts: ${stats.alerts.total} (critical: ${stats.alerts.critical}, warning: ${stats.alerts.warning})`,
+      `Alerts: ${stats.alerts.total} (critical: ${stats.alerts.critical}, unacked: ${stats.alerts.unacknowledged ?? 0})`,
     ];
     return { label: 'SYSTEM METRICS', data: lines.join('\n') };
   } catch (err) {
