@@ -1,84 +1,79 @@
-# Production stage
+# ─── Stage 1: Compile TypeScript API ─────────────────────────────────────────
 FROM node:20-alpine AS builder
 
-# Install pnpm
+LABEL stage="builder"
+
 RUN corepack enable && corepack prepare pnpm@8.15.0 --activate
 
 WORKDIR /app
 
-# Copy workspace files
+# Layer-cache: install dependencies before copying full source
 COPY /docker/pnpm-workspace.yaml ./
 COPY /docker/package.json /docker/pnpm-lock.yaml ./
 COPY /docker/turbo.json ./
-
-# Copy app package files
 COPY /apps/api/package.json ./apps/api/
 
-# Install dependencies (uses docker/pnpm-lock.yaml — pnpm 8 compatible, includes geoip-lite)
+# docker/pnpm-lock.yaml is pnpm 8 compatible and includes all production deps
 RUN pnpm install --frozen-lockfile
 
-# Copy source code
 COPY /apps/api ./apps/api
 
-# Generate Prisma client
 RUN cd apps/api && pnpm prisma:generate
 
-# Build the application
 RUN pnpm --filter @bach-dang-waf/api build
 
-# Production stage
+# ─── Stage 2: Runtime — Nginx + ModSecurity + Node.js ────────────────────────
+# Base image: Ubuntu 24.04 with Nginx 1.27 + ModSecurity 3.x + OWASP CRS pre-installed
 FROM vouu/nginx-modsecurity-base:ubuntu2404
 
-RUN apt-get update && apt-get install -y curl ca-certificates gnupg && \
+LABEL org.opencontainers.image.title="Bach Dang WAF — Backend + WAF Engine"
+LABEL org.opencontainers.image.description="Combined Node.js API, Nginx 1.27, ModSecurity 3 (OWASP CRS), and acme.sh for production WAF deployments"
+LABEL org.opencontainers.image.vendor="0xDragon"
+
+# Install Node.js 20.x and runtime system tools
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends curl ca-certificates gnupg && \
     curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && \
-    apt-get install -y nodejs && \
-    rm -rf /var/lib/apt/lists/
+    apt-get install -y --no-install-recommends nodejs openssl apache2-utils wget && \
+    rm -rf /var/lib/apt/lists/*
 
+# Bootstrap pnpm via corepack
 RUN npm install -g corepack && corepack enable && corepack prepare pnpm@8.15.0 --activate
-
-# Install OpenSSL and wget for Prisma and health checks
-RUN apt-get update && apt-get install -y openssl apache2-utils wget && rm -rf /var/lib/apt/lists/*
-
-# Install pnpm
-RUN corepack enable && corepack prepare pnpm@8.15.0 --activate
 
 WORKDIR /app
 
-# Copy workspace and package files
+# Copy workspace manifests and production artifacts from builder
 COPY --from=builder /app/pnpm-workspace.yaml ./
 COPY --from=builder /app/package.json /app/pnpm-lock.yaml ./
 COPY --from=builder /app/apps/api/package.json ./apps/api/
 
-# Copy built files and prisma
-COPY --from=builder /app/apps/api/dist ./apps/api/dist
-COPY --from=builder /app/apps/api/prisma ./apps/api/prisma
+COPY --from=builder /app/apps/api/dist    ./apps/api/dist
+COPY --from=builder /app/apps/api/prisma  ./apps/api/prisma
 
-# Install all dependencies (needed for Prisma CLI and native modules)
+# Install production dependencies (Prisma CLI + native addons require full install)
 RUN pnpm install --frozen-lockfile --filter @bach-dang-waf/api
 
-# Generate Prisma client
 RUN cd apps/api && pnpm prisma:generate
 
-# Install acme.sh for SSL certificate management
+# Install acme.sh for automated SSL certificate provisioning
 RUN cd /tmp && \
-    wget -O acme.sh.tar.gz https://github.com/acmesh-official/acme.sh/archive/master.tar.gz && \
+    wget -q -O acme.sh.tar.gz https://github.com/acmesh-official/acme.sh/archive/master.tar.gz && \
     tar -xzf acme.sh.tar.gz && \
     cd acme.sh-master && \
     ./acme.sh --install --force --home /root/.acme.sh && \
-    ln -s /root/.acme.sh/acme.sh /usr/local/bin/acme.sh && \
+    ln -sf /root/.acme.sh/acme.sh /usr/local/bin/acme.sh && \
     rm -rf /tmp/acme.sh*
 
 WORKDIR /app/apps/api
 
-
 COPY /docker/start.sh /start.sh
 RUN chmod +x /start.sh
 
-# Expose port 3001
-EXPOSE 80 443 3001 
+# 80/443 — Nginx (HTTP/HTTPS WAF traffic)
+# 3001   — Node.js management API
+EXPOSE 80 443 3001
 
-# Health check (using root endpoint)
-HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
-  CMD wget --no-verbose --tries=1 --spider http://localhost:3001/ || exit 1
+HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
+    CMD wget --no-verbose --tries=1 --spider http://localhost:3001/api/health || exit 1
 
 CMD ["/start.sh"]

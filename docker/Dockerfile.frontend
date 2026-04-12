@@ -1,38 +1,48 @@
-# ─── Stage 1: Build ──────────────────────────────────────────────────────────
+# ─── Stage 1: Build React/Vite SPA ──────────────────────────────────────────
 FROM node:20-alpine AS builder
+
+LABEL stage="builder"
 
 RUN corepack enable && corepack prepare pnpm@8.15.0 --activate
 
 WORKDIR /app
 
-# Copy workspace manifests first (layer cache)
-COPY pnpm-workspace.yaml ./
-COPY package.json ./
-COPY pnpm-lock.yaml ./
-COPY turbo.json ./
+# Layer-cache: copy manifests before source to maximise cache reuse
+COPY pnpm-workspace.yaml package.json pnpm-lock.yaml turbo.json ./
 COPY apps/web/package.json ./apps/web/
 
 RUN pnpm install --frozen-lockfile
 
-# Copy source and build
-# VITE_API_URL is intentionally NOT set here — the app uses relative '/api'.
-# Nginx (stage 2) proxies /api → backend on localhost:3001.
-# This makes the build IP-agnostic: works on any private IP, public IP, or hostname.
 COPY apps/web ./apps/web
+
+# Build-time note:
+# VITE_API_URL is NOT embedded. The SPA uses relative /api paths exclusively.
+# At runtime, nginx (stage 2) proxies /api → the backend container on port 3001.
+# This keeps the image portable across any IP, domain, or reverse-proxy topology.
 RUN pnpm --filter @bach-dang-waf/web build
 
-# ─── Stage 2: Serve with Nginx ───────────────────────────────────────────────
+# ─── Stage 2: Nginx SPA server ───────────────────────────────────────────────
 FROM nginx:1.27-alpine
 
-# Copy the built SPA
+LABEL org.opencontainers.image.title="Bach Dang WAF — Management Console (Frontend)"
+LABEL org.opencontainers.image.description="Production-optimised Nginx container serving the Bach Dang WAF React SPA with /api reverse-proxy to the backend service"
+LABEL org.opencontainers.image.vendor="0xDragon"
+
+RUN apk add --no-cache tzdata && \
+    cp /usr/share/zoneinfo/Asia/Ho_Chi_Minh /etc/localtime && \
+    echo "Asia/Ho_Chi_Minh" > /etc/timezone && \
+    apk del tzdata
+
 COPY --from=builder /app/apps/web/dist /usr/share/nginx/html
 
-# Copy nginx config (serves SPA + proxies /api → backend on :3001)
+# nginx.frontend.conf:
+#   - serves the SPA with try_files fallback for client-side routing
+#   - proxies /api/* → backend:3001 with appropriate headers
 COPY docker/nginx.frontend.conf /etc/nginx/conf.d/default.conf
 
 EXPOSE 8080
 
-HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
+HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
     CMD wget --no-verbose --tries=1 --spider http://localhost:8080/ || exit 1
 
 CMD ["nginx", "-g", "daemon off;"]

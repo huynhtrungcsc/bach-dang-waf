@@ -1,42 +1,43 @@
-# Build stage
+# ─── Stage 1: Build React/Vite SPA ──────────────────────────────────────────
 FROM node:20-alpine AS builder
 
-# Install pnpm
+LABEL stage="builder"
+
 RUN corepack enable && corepack prepare pnpm@8.15.0 --activate
 
 WORKDIR /app
 
-# Copy workspace files
-COPY pnpm-workspace.yaml ./
-COPY package.json pnpm-lock.yaml ./
-COPY turbo.json ./
-
-# Copy app package files
+# Layer-cache: install deps before copying full source
+COPY pnpm-workspace.yaml package.json pnpm-lock.yaml turbo.json ./
 COPY apps/web/package.json ./apps/web/
 
-# Install dependencies
 RUN pnpm install --frozen-lockfile
 
-# Copy source code
 COPY apps/web ./apps/web
 
-# Build the application
+# VITE_API_URL is intentionally omitted.
+# The SPA uses relative /api paths; nginx in stage 2 proxies to the backend.
 RUN pnpm --filter @bach-dang-waf/web build
 
-# Production stage
-FROM nginx:alpine
+# ─── Stage 2: Nginx SPA server ───────────────────────────────────────────────
+FROM nginx:1.27-alpine
 
-# Copy built assets from builder
+LABEL org.opencontainers.image.title="Bach Dang WAF — Frontend"
+LABEL org.opencontainers.image.description="Compiled React management console served by Nginx"
+LABEL org.opencontainers.image.vendor="0xDragon"
+
+RUN apk add --no-cache tzdata && \
+    cp /usr/share/zoneinfo/Asia/Ho_Chi_Minh /etc/localtime && \
+    echo "Asia/Ho_Chi_Minh" > /etc/timezone && \
+    apk del tzdata
+
 COPY --from=builder /app/apps/web/dist /usr/share/nginx/html
 
-# Copy custom nginx config
 COPY config/nginx.conf /etc/nginx/conf.d/default.conf
 
-# Expose port 8088
-EXPOSE 8088
+EXPOSE 8080
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-  CMD wget --no-verbose --tries=1 --spider http://localhost:8088/ || exit 1
+HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
+    CMD wget --no-verbose --tries=1 --spider http://localhost:8080/ || exit 1
 
 CMD ["nginx", "-g", "daemon off;"]
