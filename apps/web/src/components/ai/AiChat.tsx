@@ -3,6 +3,8 @@ import {
   Terminal, X, Send, Loader2, ChevronRight,
   RotateCcw, Settings2, AlertCircle,
 } from 'lucide-react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { aiService, ChatMessage } from '@/services/ai.service';
 import { AiProviderSettings } from './AiProviderSettings';
 import { cn } from '@/lib/utils';
@@ -73,7 +75,7 @@ function MessageRow({ msg }: { msg: Message }) {
       </div>
       <div className="max-w-[88%] min-w-0">
         <div className={cn(
-          'text-[13px] rounded px-3 py-2 leading-relaxed whitespace-pre-wrap break-words border',
+          'text-[13px] rounded px-3 py-2.5 border',
           msg.isError
             ? 'bg-red-50 text-red-700 border-red-200'
             : 'bg-white text-slate-800 border-slate-200'
@@ -84,7 +86,93 @@ function MessageRow({ msg }: { msg: Message }) {
               <span className="text-[11px] font-semibold uppercase tracking-wide">Error</span>
             </div>
           )}
-          {msg.content}
+          <ReactMarkdown
+            remarkPlugins={[remarkGfm]}
+            components={{
+              p: ({ children }) => (
+                <p className="mb-1.5 last:mb-0 leading-relaxed">{children}</p>
+              ),
+              strong: ({ children }) => (
+                <strong className="font-semibold text-slate-900">{children}</strong>
+              ),
+              em: ({ children }) => (
+                <em className="italic text-slate-700">{children}</em>
+              ),
+              h1: ({ children }) => (
+                <h1 className="text-[14px] font-bold text-slate-900 mt-2 mb-1 first:mt-0">{children}</h1>
+              ),
+              h2: ({ children }) => (
+                <h2 className="text-[13px] font-semibold text-slate-800 mt-2 mb-1 first:mt-0 border-b border-slate-100 pb-0.5">{children}</h2>
+              ),
+              h3: ({ children }) => (
+                <h3 className="text-[13px] font-semibold text-slate-700 mt-1.5 mb-0.5 first:mt-0">{children}</h3>
+              ),
+              ul: ({ children }) => (
+                <ul className="list-disc list-inside space-y-0.5 mb-1.5 pl-1">{children}</ul>
+              ),
+              ol: ({ children }) => (
+                <ol className="list-decimal list-inside space-y-0.5 mb-1.5 pl-1">{children}</ol>
+              ),
+              li: ({ children }) => (
+                <li className="leading-relaxed text-slate-700">{children}</li>
+              ),
+              code: ({ children, className }) => {
+                const isBlock = className?.includes('language-');
+                if (isBlock) {
+                  return (
+                    <code className="block bg-slate-50 border border-slate-200 rounded px-2.5 py-2 my-1.5 font-mono text-[11px] text-slate-800 whitespace-pre-wrap overflow-x-auto">
+                      {children}
+                    </code>
+                  );
+                }
+                return (
+                  <code className="bg-slate-100 rounded px-1 py-0.5 font-mono text-[11px] text-slate-800">
+                    {children}
+                  </code>
+                );
+              },
+              pre: ({ children }) => <>{children}</>,
+              blockquote: ({ children }) => (
+                <blockquote className="border-l-2 border-slate-300 pl-3 my-1.5 text-slate-600 italic">
+                  {children}
+                </blockquote>
+              ),
+              table: ({ children }) => (
+                <div className="overflow-x-auto my-2">
+                  <table className="w-full text-[12px] border-collapse border border-slate-200">
+                    {children}
+                  </table>
+                </div>
+              ),
+              thead: ({ children }) => (
+                <thead className="bg-slate-100">{children}</thead>
+              ),
+              tbody: ({ children }) => (
+                <tbody className="divide-y divide-slate-200">{children}</tbody>
+              ),
+              tr: ({ children }) => (
+                <tr className="hover:bg-slate-50">{children}</tr>
+              ),
+              th: ({ children }) => (
+                <th className="px-2.5 py-1.5 text-left font-semibold text-slate-700 border border-slate-200 whitespace-nowrap">
+                  {children}
+                </th>
+              ),
+              td: ({ children }) => (
+                <td className="px-2.5 py-1.5 text-slate-600 border border-slate-200">
+                  {children}
+                </td>
+              ),
+              hr: () => <hr className="border-slate-200 my-2" />,
+              a: ({ children, href }) => (
+                <a href={href} className="text-blue-600 underline underline-offset-2 hover:text-blue-800" target="_blank" rel="noopener noreferrer">
+                  {children}
+                </a>
+              ),
+            }}
+          >
+            {msg.content}
+          </ReactMarkdown>
         </div>
         <div className="flex items-center gap-2 mt-0.5 pl-0.5">
           <span className="text-[10px] text-slate-400">{time}</span>
