@@ -1,9 +1,8 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import {
-  BotMessageSquare, X, Send, Loader2,
-  ChevronDown, Shield, RotateCcw, Settings2,
+  Terminal, X, Send, Loader2, ChevronRight,
+  RotateCcw, Settings2, AlertCircle,
 } from 'lucide-react';
-import { Button } from '@/components/ui/button';
 import { aiService, ChatMessage } from '@/services/ai.service';
 import { AiProviderSettings } from './AiProviderSettings';
 import { cn } from '@/lib/utils';
@@ -18,61 +17,79 @@ interface Message extends ChatMessage {
   isError?: boolean;
 }
 
-// ─── Suggested prompts ────────────────────────────────────────────────────────
+// ─── Suggested queries ────────────────────────────────────────────────────────
 
 const SUGGESTIONS = [
-  'RAM và CPU hiện tại bao nhiêu?',
-  'Hệ thống đang bật những rule WAF nào?',
-  'Các cuộc tấn công trong 1 giờ gần đây?',
-  'Rule nào đang tắt trong hệ thống?',
-  'Cuộc tấn công SQL Injection mới nhất là gì?',
-  'Có bao nhiêu domain đang được bảo vệ?',
-  'Hệ thống có đang bị quá tải không?',
-  'Giải thích các cảnh báo gần đây',
+  { label: 'System metrics', query: 'RAM và CPU hiện tại bao nhiêu?' },
+  { label: 'Active WAF rules', query: 'Hệ thống đang bật những rule WAF nào?' },
+  { label: 'Attack events (1h)', query: 'Các cuộc tấn công trong 1 giờ gần đây?' },
+  { label: 'Disabled rules', query: 'Rule nào đang tắt trong hệ thống?' },
+  { label: 'SQL injection log', query: 'Cuộc tấn công SQL Injection mới nhất là gì?' },
+  { label: 'Protected sites', query: 'Có bao nhiêu domain đang được bảo vệ?' },
 ];
 
-// ─── Loading dots ─────────────────────────────────────────────────────────────
+// ─── Typing indicator ─────────────────────────────────────────────────────────
 
 function TypingIndicator() {
   return (
-    <div className="flex items-center gap-1 px-3 py-2">
+    <div className="flex items-center gap-0.5 py-1 px-0.5">
       {[0, 1, 2].map(i => (
         <span
           key={i}
-          className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce"
-          style={{ animationDelay: `${i * 0.15}s` }}
+          className="inline-block w-1 h-1 bg-slate-400 rounded-full animate-bounce"
+          style={{ animationDelay: `${i * 0.14}s` }}
         />
       ))}
     </div>
   );
 }
 
-// ─── Message bubble ───────────────────────────────────────────────────────────
+// ─── Message row ─────────────────────────────────────────────────────────────
 
-function MessageBubble({ msg }: { msg: Message }) {
+function MessageRow({ msg }: { msg: Message }) {
   const isUser = msg.role === 'user';
+  const time = msg.ts.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+
+  if (isUser) {
+    return (
+      <div className="flex justify-end gap-2 items-start">
+        <div className="max-w-[82%]">
+          <div className="text-[13px] text-slate-700 bg-slate-100 border border-slate-200 rounded px-3 py-2 text-right leading-relaxed">
+            {msg.content}
+          </div>
+          <div className="text-[10px] text-slate-400 text-right mt-0.5 pr-0.5">{time}</div>
+        </div>
+        <div className="w-5 h-5 rounded bg-slate-200 flex-shrink-0 flex items-center justify-center mt-0.5">
+          <span className="text-[9px] font-bold text-slate-500">U</span>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className={cn('flex w-full', isUser ? 'justify-end' : 'justify-start')}>
-      <div className={cn('max-w-[88%] space-y-1', isUser ? 'items-end' : 'items-start')}>
-        <div
-          className={cn(
-            'px-3 py-2.5 rounded-lg text-sm leading-relaxed whitespace-pre-wrap break-words',
-            isUser
-              ? 'bg-blue-600 text-white rounded-br-sm'
-              : msg.isError
-                ? 'bg-red-50 text-red-700 border border-red-200 rounded-bl-sm'
-                : 'bg-white text-slate-800 border border-slate-200 shadow-xs rounded-bl-sm'
+    <div className="flex gap-2 items-start">
+      <div className="w-5 h-5 rounded bg-slate-800 flex-shrink-0 flex items-center justify-center mt-0.5">
+        <Terminal className="w-2.5 h-2.5 text-slate-200" />
+      </div>
+      <div className="max-w-[88%] min-w-0">
+        <div className={cn(
+          'text-[13px] rounded px-3 py-2 leading-relaxed whitespace-pre-wrap break-words border',
+          msg.isError
+            ? 'bg-red-50 text-red-700 border-red-200'
+            : 'bg-white text-slate-800 border-slate-200'
+        )}>
+          {msg.isError && (
+            <div className="flex items-center gap-1.5 mb-1.5 text-red-600">
+              <AlertCircle className="w-3.5 h-3.5 flex-shrink-0" />
+              <span className="text-[11px] font-semibold uppercase tracking-wide">Error</span>
+            </div>
           )}
-        >
           {msg.content}
         </div>
-        <div className={cn('flex items-center gap-1.5 px-0.5', isUser ? 'justify-end' : 'justify-start')}>
-          <span className="text-[11px] text-slate-400">
-            {msg.ts.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}
-          </span>
+        <div className="flex items-center gap-2 mt-0.5 pl-0.5">
+          <span className="text-[10px] text-slate-400">{time}</span>
           {msg.model && msg.model !== 'guard' && (
-            <span className="text-[10px] text-slate-300 font-mono truncate max-w-[180px]">
+            <span className="text-[10px] text-slate-300 font-mono truncate max-w-[200px]">
               {msg.model}
             </span>
           )}
@@ -105,15 +122,12 @@ export function AiChat() {
   useEffect(() => {
     if (open) {
       scrollToBottom();
-      setTimeout(() => inputRef.current?.focus(), 100);
+      setTimeout(() => inputRef.current?.focus(), 120);
     }
   }, [open, messages, scrollToBottom]);
 
   const buildHistory = (): ChatMessage[] =>
-    messages
-      .filter(m => !m.isError)
-      .slice(-10)
-      .map(({ role, content }) => ({ role, content }));
+    messages.filter(m => !m.isError).slice(-10).map(({ role, content }) => ({ role, content }));
 
   const sendMessage = useCallback(async (text: string) => {
     const trimmed = text.trim();
@@ -132,30 +146,26 @@ export function AiChat() {
     setLoading(true);
 
     try {
-      const history = buildHistory();
-      const res = await aiService.chat(trimmed, history);
-
-      const assistantMsg: Message = {
+      const res = await aiService.chat(trimmed, buildHistory());
+      setMessages(prev => [...prev, {
         id: crypto.randomUUID(),
         role: 'assistant',
         content: res.reply,
         ts: new Date(),
         model: res.model,
-      };
-      setMessages(prev => [...prev, assistantMsg]);
+      }]);
     } catch (err: any) {
       const errText =
         err?.response?.data?.message ||
         err?.message ||
-        'Không thể kết nối dịch vụ AI. Vui lòng kiểm tra cấu hình provider trong phần cài đặt.';
-      const errMsg: Message = {
+        'Connection failed. Check AI provider configuration.';
+      setMessages(prev => [...prev, {
         id: crypto.randomUUID(),
         role: 'assistant',
         content: errText,
         ts: new Date(),
         isError: true,
-      };
-      setMessages(prev => [...prev, errMsg]);
+      }]);
     } finally {
       setLoading(false);
     }
@@ -176,47 +186,49 @@ export function AiChat() {
 
   return (
     <>
-      {/* Floating trigger button */}
+      {/* ── Trigger chip ── */}
       <button
         onClick={() => setOpen(o => !o)}
         className={cn(
-          'fixed bottom-6 right-6 z-50 flex items-center justify-center',
-          'w-12 h-12 rounded-full shadow-lg transition-all duration-200',
-          'bg-blue-600 text-white hover:bg-blue-700 active:scale-95',
-          open && 'rotate-180 bg-slate-700 hover:bg-slate-800'
+          'fixed bottom-5 right-5 z-50 flex items-center gap-2',
+          'h-8 px-3 rounded border text-[12px] font-medium',
+          'shadow-sm transition-all duration-150 select-none',
+          open
+            ? 'bg-slate-800 border-slate-700 text-white'
+            : 'bg-white border-slate-300 text-slate-700 hover:bg-slate-50 hover:border-slate-400',
         )}
-        title="WAF Assistant"
+        title="WAF Query Console"
       >
-        {open ? <X className="w-5 h-5" /> : <BotMessageSquare className="w-5 h-5" />}
+        {open ? (
+          <><X className="w-3.5 h-3.5" /> Close</>
+        ) : (
+          <><Terminal className="w-3.5 h-3.5 text-slate-500" /> Query Console</>
+        )}
       </button>
 
-      {/* Chat panel */}
+      {/* ── Panel ── */}
       <div
         className={cn(
           'fixed bottom-0 right-0 z-40 flex flex-col',
-          'w-[420px] h-[600px] max-h-[90vh]',
-          'bg-slate-50 border-l border-t border-slate-200 shadow-xl',
-          'transition-transform duration-300 ease-in-out',
-          open ? 'translate-x-0 translate-y-0' : 'translate-x-full'
+          'w-[420px] h-[580px] max-h-[90vh]',
+          'bg-white border-l border-t border-slate-200',
+          'shadow-2xl shadow-slate-900/10',
+          'transition-transform duration-250 ease-in-out',
+          open ? 'translate-x-0' : 'translate-x-full'
         )}
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-4 py-3 bg-white border-b border-slate-200">
-          <div className="flex items-center gap-2.5">
-            <div className="flex items-center justify-center w-7 h-7 rounded bg-blue-600">
-              <Shield className="w-4 h-4 text-white" />
-            </div>
-            <div>
-              <div className="text-sm font-semibold text-slate-800 leading-none">WAF Assistant</div>
-              <div className="text-[11px] text-slate-400 mt-0.5">Bach Dang WAF AI</div>
-            </div>
+        <div className="flex items-center justify-between px-4 h-11 border-b border-slate-200 bg-slate-50 flex-shrink-0">
+          <div className="flex items-center gap-2">
+            <Terminal className="w-4 h-4 text-slate-500" />
+            <span className="text-[13px] font-semibold text-slate-700 tracking-tight">WAF Query Console</span>
+            <span className="text-[10px] text-slate-400 border border-slate-200 rounded px-1.5 py-0.5 ml-0.5">AI</span>
           </div>
-          <div className="flex items-center gap-1">
-            {/* Settings button — admin only */}
+          <div className="flex items-center gap-0.5">
             {isAdmin && (
               <button
                 onClick={() => setSettingsOpen(true)}
-                className="p-1.5 rounded text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-colors"
+                className="p-1.5 rounded text-slate-400 hover:text-slate-600 hover:bg-slate-200 transition-colors"
                 title="AI Provider Settings"
               >
                 <Settings2 className="w-3.5 h-3.5" />
@@ -225,44 +237,39 @@ export function AiChat() {
             {messages.length > 0 && (
               <button
                 onClick={handleClear}
-                className="p-1.5 rounded text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors"
-                title="Clear chat"
+                className="p-1.5 rounded text-slate-400 hover:text-slate-600 hover:bg-slate-200 transition-colors"
+                title="Clear session"
               >
                 <RotateCcw className="w-3.5 h-3.5" />
               </button>
             )}
-            <button
-              onClick={() => setOpen(false)}
-              className="p-1.5 rounded text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors"
-            >
-              <ChevronDown className="w-4 h-4" />
-            </button>
           </div>
         </div>
 
-        {/* Messages area */}
-        <div className="flex-1 overflow-y-auto px-3 py-3 space-y-3">
+        {/* Messages */}
+        <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3 bg-slate-50/50">
+          {/* Welcome / suggestions */}
           {messages.length === 0 && showSuggestions && (
-            <div className="space-y-3">
-              <div className="bg-white rounded-lg border border-slate-200 p-3 shadow-xs">
-                <p className="text-sm text-slate-600 leading-relaxed">
-                  Xin chào! Tôi là WAF Assistant. Tôi có thể giúp bạn phân tích:
-                </p>
-                <ul className="mt-2 text-xs text-slate-500 space-y-1 list-disc list-inside">
-                  <li>Tài nguyên hệ thống (CPU, RAM, disk)</li>
-                  <li>WAF rules — bật/tắt, giải thích</li>
-                  <li>Logs và phân tích tấn công</li>
-                  <li>Lưu lượng và cảnh báo bảo mật</li>
-                </ul>
+            <div className="space-y-3 pt-1">
+              <div className="text-[12px] text-slate-500 border border-slate-200 rounded bg-white px-3 py-2.5 leading-relaxed">
+                Query WAF system status, security rules, logs, and attack analytics.
               </div>
-              <div className="grid grid-cols-1 gap-1.5">
+
+              <div className="space-y-1">
+                <div className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider px-0.5 mb-1.5">
+                  Suggested queries
+                </div>
                 {SUGGESTIONS.map(s => (
                   <button
-                    key={s}
-                    onClick={() => sendMessage(s)}
-                    className="text-left text-xs px-3 py-2 rounded border border-slate-200 bg-white hover:bg-blue-50 hover:border-blue-300 text-slate-600 hover:text-blue-700 transition-colors"
+                    key={s.query}
+                    onClick={() => sendMessage(s.query)}
+                    className="w-full flex items-center gap-2.5 text-left px-3 py-2 rounded border border-slate-200 bg-white hover:border-slate-400 hover:bg-slate-50 transition-colors group"
                   >
-                    {s}
+                    <ChevronRight className="w-3 h-3 text-slate-300 group-hover:text-slate-500 flex-shrink-0" />
+                    <div>
+                      <div className="text-[12px] font-medium text-slate-600 group-hover:text-slate-800">{s.label}</div>
+                      <div className="text-[11px] text-slate-400 font-mono">{s.query}</div>
+                    </div>
                   </button>
                 ))}
               </div>
@@ -270,12 +277,15 @@ export function AiChat() {
           )}
 
           {messages.map(msg => (
-            <MessageBubble key={msg.id} msg={msg} />
+            <MessageRow key={msg.id} msg={msg} />
           ))}
 
           {loading && (
-            <div className="flex justify-start">
-              <div className="bg-white border border-slate-200 rounded-lg rounded-bl-sm shadow-xs">
+            <div className="flex gap-2 items-start">
+              <div className="w-5 h-5 rounded bg-slate-800 flex-shrink-0 flex items-center justify-center mt-0.5">
+                <Terminal className="w-2.5 h-2.5 text-slate-200" />
+              </div>
+              <div className="bg-white border border-slate-200 rounded px-3 py-2">
                 <TypingIndicator />
               </div>
             </div>
@@ -284,50 +294,57 @@ export function AiChat() {
           <div ref={messagesEndRef} />
         </div>
 
-        {/* Input area */}
-        <div className="border-t border-slate-200 bg-white px-3 py-2.5">
+        {/* Input */}
+        <div className="border-t border-slate-200 bg-white px-3 py-2.5 flex-shrink-0">
           <div className="flex items-end gap-2">
-            <textarea
-              ref={inputRef}
-              value={input}
-              onChange={e => setInput(e.target.value)}
-              onKeyDown={handleKeyDown}
-              placeholder="Hỏi về hệ thống WAF..."
-              disabled={loading}
-              rows={1}
-              className={cn(
-                'flex-1 resize-none rounded-md border border-slate-200 bg-slate-50',
-                'px-3 py-2 text-sm text-slate-800 placeholder:text-slate-400',
-                'focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent',
-                'disabled:opacity-50 max-h-28 overflow-y-auto',
-              )}
-              style={{ lineHeight: '1.5' }}
-              onInput={e => {
-                const el = e.currentTarget;
-                el.style.height = 'auto';
-                el.style.height = Math.min(el.scrollHeight, 112) + 'px';
-              }}
-            />
-            <Button
-              size="icon-sm"
+            <div className="flex-1 relative">
+              <textarea
+                ref={inputRef}
+                value={input}
+                onChange={e => setInput(e.target.value)}
+                onKeyDown={handleKeyDown}
+                placeholder="Enter query..."
+                disabled={loading}
+                rows={1}
+                className={cn(
+                  'w-full resize-none rounded border border-slate-200 bg-slate-50',
+                  'px-3 py-2 text-[13px] text-slate-800 placeholder:text-slate-400',
+                  'focus:outline-none focus:ring-1 focus:ring-slate-400 focus:border-slate-400',
+                  'disabled:opacity-50 max-h-28 overflow-y-auto font-mono',
+                )}
+                style={{ lineHeight: '1.5' }}
+                onInput={e => {
+                  const el = e.currentTarget;
+                  el.style.height = 'auto';
+                  el.style.height = Math.min(el.scrollHeight, 112) + 'px';
+                }}
+              />
+            </div>
+            <button
               onClick={() => sendMessage(input)}
               disabled={loading || !input.trim()}
-              className="shrink-0 bg-blue-600 hover:bg-blue-700 text-white"
+              className={cn(
+                'flex-shrink-0 h-8 w-8 flex items-center justify-center rounded border transition-colors',
+                loading || !input.trim()
+                  ? 'border-slate-200 text-slate-300 cursor-not-allowed bg-white'
+                  : 'border-slate-700 bg-slate-800 text-white hover:bg-slate-700'
+              )}
             >
               {loading ? (
-                <Loader2 className="w-4 h-4 animate-spin" />
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
               ) : (
-                <Send className="w-4 h-4" />
+                <Send className="w-3.5 h-3.5" />
               )}
-            </Button>
+            </button>
           </div>
-          <p className="text-[10px] text-slate-400 mt-1.5 text-center">
-            Enter gửi · Shift+Enter xuống dòng · Chỉ hỗ trợ câu hỏi về WAF
-          </p>
+          <div className="flex items-center justify-between mt-1.5 px-0.5">
+            <span className="text-[10px] text-slate-400 font-mono">Enter to send · Shift+Enter new line</span>
+            <span className="text-[10px] text-slate-300">WAF scope only</span>
+          </div>
         </div>
       </div>
 
-      {/* Provider settings modal */}
+      {/* Provider settings */}
       <AiProviderSettings open={settingsOpen} onClose={() => setSettingsOpen(false)} />
     </>
   );

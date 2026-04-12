@@ -2,6 +2,7 @@ import { Link, useMatchRoute } from '@tanstack/react-router';
 import { useAuth } from '@/auth';
 import { useRouter } from '@tanstack/react-router';
 import { useTranslation } from 'react-i18next';
+import { BrandMark } from '@/components/ui/BrandLogo';
 import {
   LayoutGrid,
   Globe,
@@ -127,11 +128,7 @@ export function AppSidebar({ collapsed, onToggle }: AppSidebarProps) {
           collapsed ? 'justify-center' : 'px-4 gap-2.5',
         ].join(' ')}
       >
-        <img
-          src="/bach-dang-waf-logo.png"
-          alt="BACH DANG WAF"
-          className="h-7 w-7 flex-shrink-0 object-contain"
-        />
+        <BrandMark size={28} variant="dark" />
         {!collapsed && (
           <div className="flex-1 min-w-0">
             <div className="text-slate-800 text-[13px] font-bold tracking-wide leading-none truncate">
